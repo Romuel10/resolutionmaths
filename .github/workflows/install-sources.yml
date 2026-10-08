@@ -2,7 +2,7 @@ name: Installer les sources
 on:
   push:
     paths:
-      - 'source_bundle.tar.xz'
+      - 'source_bundle.part08'
 permissions:
   contents: write
 jobs:
@@ -14,8 +14,8 @@ jobs:
           persist-credentials: true
       - name: Extraire la version applicative
         run: |
-          tar -xJf source_bundle.tar.xz
-          rm source_bundle.tar.xz
+          cat source_bundle.part?? | base64 -d | tar -xJf -
+          rm source_bundle.part??
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
