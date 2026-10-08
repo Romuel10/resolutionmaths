@@ -1,0 +1,23 @@
+name: Installer les sources
+on:
+  push:
+    paths:
+      - 'source_bundle.tar.xz'
+permissions:
+  contents: write
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Extraire la version applicative
+        run: |
+          tar -xJf source_bundle.tar.xz
+          rm source_bundle.tar.xz
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: implement Resolution Maths web application'
+          git push
