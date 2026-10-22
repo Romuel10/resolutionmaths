@@ -22,7 +22,11 @@ jobs:
         with:
           python-version: '3.12'
       - name: Installer le SDK Android
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+        uses: android-actions/setup-android@v4
+        with:
+          cmdline-tools-version: '12266719'
+          packages: 'platforms;android-35 build-tools;35.0.0'
+          log-accepted-android-sdk-licenses: 'false'
       - name: Créer une clé temporaire pour l’application de test
         run: >-
           keytool -genkeypair -keystore "$RUNNER_TEMP/test.p12" -storetype PKCS12
