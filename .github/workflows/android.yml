@@ -38,10 +38,10 @@ jobs:
           ANDROID_KEY_PASSWORD: android
         run: >-
           python scripts/build_android.py --preview --keystore "$RUNNER_TEMP/test.p12"
-          --output dist/Resolution-Maths-1.1.0-test.apk
+          --output dist/Resolution-Maths-test.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Resolution-Maths-1.1.0-test
-          path: dist/Resolution-Maths-1.1.0-test.apk
+          name: Resolution-Maths-test
+          path: dist/Resolution-Maths-test.apk
           if-no-files-found: error
           retention-days: 30

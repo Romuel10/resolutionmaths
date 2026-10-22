@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import xml.etree.ElementTree as ET
 import zipfile
 from prepare_android_assets import prepare, ROOT
 
@@ -19,6 +20,8 @@ def run(*args):
 
 def main():
     sdk = Path(os.environ.get("ANDROID_SDK_ROOT", os.environ.get("ANDROID_HOME", "/opt/android-sdk")))
+    manifest_source = ROOT / "android/app/src/main/AndroidManifest.xml"
+    version = ET.parse(manifest_source).getroot().attrib["{http://schemas.android.com/apk/res/android}versionName"]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--platform", type=Path, default=sdk / "platforms/android-35/android.jar")
     parser.add_argument("--build-tools", type=Path, default=sdk / "build-tools/35.0.0")
@@ -26,8 +29,10 @@ def main():
     parser.add_argument("--keystore", type=Path, required=True)
     parser.add_argument("--alias", default="resolutionmaths")
     parser.add_argument("--preview", action="store_true", help="Separate testing application; never replaces a release")
-    parser.add_argument("--output", type=Path, default=ROOT / "dist/Resolution-Maths-1.1.0.apk")
+    parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+    if args.output is None:
+        args.output = ROOT / f"dist/Resolution-Maths-{version}{'-test' if args.preview else ''}.apk"
     for name in ["ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_PASSWORD"]:
         if not os.environ.get(name): parser.error(f"Missing {name}")
     if not args.platform.is_file(): parser.error(f"Missing Android 35 platform: {args.platform}")
@@ -43,7 +48,7 @@ def main():
     if args.preview:
         text = manifest.read_text().replace('package="mg.resolutionmaths.app"', 'package="mg.resolutionmaths.preview"')
         text = text.replace('android:label="Résolution Maths"', 'android:label="Résolution Maths Test"')
-        text = text.replace('android:versionName="1.1.0"', 'android:versionName="1.1.0-test"')
+        text = text.replace(f'android:versionName="{version}"', f'android:versionName="{version}-test"')
         manifest = build / "preview/AndroidManifest.xml"
         manifest.parent.mkdir(parents=True, exist_ok=True)
         manifest.write_text(text)

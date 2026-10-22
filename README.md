@@ -1,6 +1,6 @@
 # Résolution Maths
 
-Application éducative de résolution mathématique pour la préparation du baccalauréat à Madagascar. Version **1.1.0**.
+Application éducative de résolution mathématique pour la préparation du baccalauréat à Madagascar. Version **1.1.1**.
 
 ## Fonctionnement
 
@@ -58,7 +58,7 @@ Une application Android native est disponible dans `android/` : elle embarque l�
 Pyodide, SymPy et KaTeX. Les calculs et les formules sont utilisables **hors connexion,
 dès le premier démarrage**. Android 8.0 ou plus récent est requis, avec un Android System
 WebView à jour. Le nom dans le téléphone est **Résolution Maths** et l’icône reprend le
-symbole ∑ du site. L’historique reste uniquement sur l’appareil.
+symbole √x du site. L’historique reste uniquement sur l’appareil.
 
 Le contenu local utilise une origine HTTPS interceptée dans la WebView, pour permettre
 les workers et WebAssembly sans autoriser les URL `file://` ni exposer de pont JavaScript
@@ -77,12 +77,26 @@ export ANDROID_KEY_PASSWORD="$ANDROID_KEYSTORE_PASSWORD"
 python scripts/build_android.py --keystore /chemin/prive/resolutionmaths.p12
 ```
 
-Le fichier généré est `dist/Resolution-Maths-1.1.0.apk`. Ne jamais publier la clé privée
+Le fichier généré est `dist/Resolution-Maths-1.1.1.apk`. Ne jamais publier la clé privée
 dans le dépôt. Le workflow **APK Android de test** fournit aussi un APK de test dans les
 artifacts GitHub Actions. Celui-ci s’installe comme une application séparée nommée
 **Résolution Maths Test** : sa clé temporaire ne sert pas à signer les mises à jour de
 l’application distribuée. Une nouvelle compilation de test peut nécessiter de désinstaller
 la précédente application de test ; la version distribuée et son historique restent séparés.
+
+### Icône de la version 1.1.1
+
+Le logo √x utilise des ressources dédiées à Résolution Maths. Les anciennes ressources
+`ic_launcher` ont été retirées. L’APK inclut les icônes PNG dans cinq résolutions pour
+les installateurs, les versions adaptatives ronde et standard et une couche monochrome
+pour les icônes thématiques d’Android 13 et plus. Le logo du site et celui de l’application
+utilisent le même dessin. Pour régénérer les ressources : installer Pillow puis exécuter
+`python scripts/generate_android_icons.py`.
+
+Le nom de package et la clé de signature de la version distribuée sont conservés.
+La version Android passe de 110 à 111 pour permettre la mise à jour directe. Après la
+mise à jour, si un raccourci d’accueil conserve l’ancienne image dans son cache, retirer
+uniquement ce raccourci puis le recréer depuis la liste des applications.
 
 ## Notation
 
