@@ -15,7 +15,7 @@ def check(mode,expression='',**values):
 
 def test_quadratic():
     r=check('equation','2x^2-5x+2=0')
-    assert '1 / 2' in r['answers'][0]
+    assert r'\frac{1}{2}' in r['answers'][0]
     assert '2' in r['answers'][0]
     assert any('Discriminant' in step['label'] for step in r['steps'])
 
@@ -26,7 +26,7 @@ def test_linear_and_identity():
 
 
 def test_inequations():
-    assert '2, 3' in check('inequation','x^2-5x+6<=0')['answers'][0]
+    assert r'\left[2\,;\,3\right]' in check('inequation','x^2-5x+6<=0')['answers'][0]
     assert check('inequation','(x-1)/(x+2)>0')['ok']
 
 
@@ -65,7 +65,7 @@ def test_system():
 
 def test_sequence():
     r=check('suite','(u+3)/4',start='5',count='3')
-    assert r['answers']==['u_{0}=5','u_{1}=2','u_{2}=5 / 4']
+    assert r['answers']==['u_{0}=5','u_{1}=2',r'u_{2}=\frac{5}{4}']
 
 
 def test_stats():
@@ -83,7 +83,7 @@ def test_arithmetic():
 
 
 def test_probability():
-    assert '15 / 128' in check('probabilites',first='10',second='3',point='0.5')['answers'][0]
+    assert r'\frac{15}{128}' in check('probabilites',first='10',second='3',point='0.5')['answers'][0]
 
 
 def test_finance():

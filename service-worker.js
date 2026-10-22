@@ -1,4 +1,4 @@
-const CACHE='resolutionmaths-local-v1';
+const CACHE='resolutionmaths-local-v1.1.0';
 const CORE=['./','./index.html','./styles.css','./app.js','./worker.js','./solver.py','./icon.svg','./manifest.webmanifest'];
 self.addEventListener('install',ev=>{ev.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',ev=>{ev.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});

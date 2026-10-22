@@ -1,12 +1,24 @@
 # Résolution Maths
 
-Application éducative de résolution mathématique pour la préparation du baccalauréat à Madagascar. Version **1.0.0**.
+Application éducative de résolution mathématique pour la préparation du baccalauréat à Madagascar. Version **1.1.0**.
 
 ## Fonctionnement
 
 L'élève sélectionne le **domaine mathématique**, saisit lui-même ses données, puis obtient un résultat symbolique avec les étapes pertinentes. Les modes prévus dans cette première version : équations et inéquations en `x`, simplification, développement, factorisation, dérivation et tangente, primitives et intégrales, limites, étude de fonction, systèmes, suites récurrentes, statistiques, complexes, PGCD/PPCM, loi binomiale, intérêts simples et composés.
 
 **Important :** il ne s'agit pas d'une IA conversationnelle ni d'un interprète universel des énoncés rédigés. Les champs guidés sont conçus pour les notations des exercices du BAC. Les contenus et méthodes ne prétendent pas couvrir tous les problèmes et toutes les séries, ni remplacer les démonstrations d'un enseignant.
+
+## Dérivation et lisibilité
+
+- Dérivées exactes d’ordre 1 à 5, avec racines imbriquées, produits, quotients, logarithmes, exponentielles et fonctions trigonométriques.
+- Explication de la dérivée intérieure des racines composées et de la règle du quotient ou du produit.
+- Fractions verticales, radicaux et logarithme `ln` en mode d’affichage mathématique. Les puissances demi-entières sont présentées avec une racine : `(x²+1)√(x²+1)` au lieu d’un exposant `3/2`. Le changement est typographique et ne force aucune identité de racines.
+- Domaine réel de la saisie et domaine de validité de chaque dérivée, avec la notation scolaire française `]a ; b[`. Les restrictions d’un dénominateur ou d’une racine sont conservées après simplification.
+- Les tangentes utilisent toujours la première dérivée. Elles sont refusées hors du domaine réel ou en un point où une dérivée réelle bilatérale finie n’a pas été établie. Par exemple, `sqrt(x^2)` donne `|x|` et n’est pas dérivable en zéro.
+- Contrôle indépendant par différences finies en quatre points au maximum, choisis dans le domaine. Une concordance numérique locale n’est pas une preuve ; si le contrôle n’est pas concluant, l’application l’indique.
+- L’étude de fonction utilise le même calcul de dérivée et les mêmes restrictions de domaine. Un domaine non déterminé n’est jamais remplacé arbitrairement par tous les réels.
+
+Exemples à essayer dans « Dérivées » : `sqrt(x^2+1)`, `sqrt(x+1)/x`, `sqrt(sqrt(x)+1)`, `sqrt(x^2)` et `ln(x)/x^2`. Le symbole `√(x)` est également accepté. Le bouton racine peut entourer une expression sélectionnée.
 
 ## Architecture
 
@@ -47,7 +59,8 @@ node --check app.js
 | Équation | `2x^2-5x+2=0` |
 | Inéquation | `x^2-5x+6<=0` |
 | Système | `2x+y=5; x-y=1` |
-| Dérivée | `x^3-3x^2+2` |
+| Dérivée avec racine | `sqrt(x^2+1)` ou `√(x^2+1)` |
+| Dérivée seconde | `x/sqrt(x^2+1)`, ordre `2` |
 | Suite récurrente | `(u+3)/4`, u₀ `5`, termes `6` |
 | Statistiques | `10; 12; 15; 18` |
 | Complexe | `3+4i` |
@@ -60,6 +73,7 @@ node --check app.js
 - Les résultats exacts peuvent être fournis sous forme d'ensembles symboliques ou conditionnels lorsque SymPy ne trouve pas de forme fermée.
 - Les fonctions discontinues, certaines intégrales impropres, inéquations transcendantales et cas très complexes nécessitent une vérification manuelle.
 - Les études de fonctions ne produisent pas encore les tableaux de signes/variations scolaires complets.
+- Les domaines de certaines expressions transcendantes restent indéterminés. Le domaine de dérivation affiché est alors limité aux intervalles effectivement établis ; les fonctions discontinues et la dérivation au sens des distributions ne sont pas prises en charge.
 - Un calcul lent est interrompu au bout de 25 secondes dans l'interface (worker recréé).
 - Pour un vrai déploiement hors connexion, héberger Pyodide/SymPy et KaTeX localement et étendre la stratégie de cache. Ne pas promettre le hors-ligne avant ces tests.
 - Les suites de tests actuelles sont des tests représentatifs, pas une validation de toutes les annales malgaches.

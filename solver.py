@@ -11,6 +11,7 @@ from typing import Any
 
 import sympy as s
 from sympy.calculus.util import continuous_domain
+from sympy.printing.latex import LatexPrinter
 from sympy.parsing.sympy_parser import (parse_expr, standard_transformations,
                                          implicit_multiplication_application, convert_xor, rationalize)
 
@@ -26,17 +27,20 @@ ALLOWED = {
     'factorial': s.factorial, 'floor': s.floor, 'ceiling': s.ceiling,
 }
 GLOBALS = {'__builtins__': {}, 'Integer': s.Integer, 'Float': s.Float,
-           'Rational': s.Rational, 'Symbol': s.Symbol}
+           'Rational': s.Rational, 'Symbol': s.Symbol,
+           'Add': s.Add, 'Mul': s.Mul, 'Pow': s.Pow}
 MODES = {'auto', 'equation', 'inequation', 'simplifier', 'factoriser', 'developper',
          'derivee', 'integrale', 'limite', 'fonction', 'systeme', 'suite',
          'statistiques', 'complexes', 'arithmetique', 'probabilites', 'finance'}
 
 
-def parse_math(value: Any):
+def parse_math(value: Any, *, evaluate=True):
     if not isinstance(value, str) or not value.strip() or len(value) > 350:
         raise ValueError('Saisissez une expression mathématique de moins de 350 caractères.')
     expr = value.strip().replace('−', '-').replace('×', '*').replace('÷', '/')
     expr = expr.replace('π', 'pi').replace('∞', 'oo').replace('²', '^2').replace('³', '^3')
+    expr = re.sub(r'√\s*\(', 'sqrt(', expr)
+    expr = re.sub(r'√\s*([xyzu]|\d+(?:\.\d+)?)', r'sqrt(\1)', expr)
     expr = re.sub(r'\b(?:f|g)\(x\)\s*=', '', expr, count=1)
     # Refuser noms et tokens inconnus avant parse_expr (qui utilise eval en interne).
     if not re.fullmatch(r'[A-Za-z0-9+*/^().,\s-]+', expr):
@@ -48,7 +52,7 @@ def parse_math(value: Any):
         raise ValueError('Notation non autorisée.')
     try:
         result = parse_expr(expr, local_dict=ALLOWED, global_dict=GLOBALS,
-                            transformations=TRANSFORMS, evaluate=True)
+                            transformations=TRANSFORMS, evaluate=evaluate)
     except (SyntaxError, TypeError, ValueError, NameError, AttributeError, ZeroDivisionError) as exc:
         raise ValueError('Expression non comprise. Vérifiez les parenthèses et les opérateurs.') from exc
     if not isinstance(result, s.Basic):
@@ -58,18 +62,50 @@ def parse_math(value: Any):
     return result
 
 
+class SchoolLatexPrinter(LatexPrinter):
+    """Keep fractions stacked and write half-integer powers with a radical.
+
+    This changes notation only: no forced power simplification or positivity
+    assumption is applied to the mathematical expression.
+    """
+
+    def _print_Pow(self, expr):
+        exponent = expr.exp
+        if isinstance(exponent, s.Rational) and exponent.q == 2 and abs(exponent.p) > 1:
+            power = abs(exponent.p) // 2
+            base = self._print(expr.base)
+            factor = base if expr.base.is_Atom else rf'\left({base}\right)'
+            if power > 1:
+                factor = rf'{factor}^{{{power}}}'
+            radical = rf'{factor} \sqrt{{{base}}}'
+            return rf'\frac{{1}}{{{radical}}}' if exponent < 0 else radical
+        return super()._print_Pow(expr)
+
+    def _print_Piecewise(self, expr):
+        return super()._print_Piecewise(expr).replace(r'\text{for}', r'\text{si}').replace(r'\text{otherwise}', r'\text{sinon}')
+
+
 def L(value):
-    return s.latex(value, mul_symbol='dot', fold_short_frac=True)
+    if value is s.S.Reals:
+        return r'\mathbb{R}'
+    if isinstance(value, s.Interval):
+        left = r'\left]' if value.left_open else r'\left['
+        right = r'\right[' if value.right_open else r'\right]'
+        return rf'{left}{L(value.start)}\,;\,{L(value.end)}{right}'
+    if isinstance(value, s.Union):
+        return r' \cup '.join(L(part) for part in value.args)
+    return SchoolLatexPrinter({'mul_symbol': None, 'ln_notation': True, 'fold_short_frac': False,
+                               'fold_frac_powers': False}).doprint(value)
 
 
 def step(label, latex, note=''):
     return {'label': label, 'latex': str(latex), 'note': note}
 
 
-def result(title, steps, answers, *, description='', plot=None):
+def result(title, steps, answers, *, description='', plot=None, **details):
     return {'ok': True, 'title': title, 'description': description,
             'steps': steps, 'answers': [str(a) for a in answers],
-            'plot': plot or []}
+            'plot': plot or [], **details}
 
 
 def read_expr(data, key='expression'):
@@ -96,7 +132,7 @@ def as_int(value, name, low=0, high=10000):
     return int(num)
 
 
-def series_plot(expr, a=-8, b=8, count=280):
+def series_plot(expr, a=-8, b=8, count=280, domain=None):
     if expr.free_symbols - {x}:
         return []
     try:
@@ -107,6 +143,9 @@ def series_plot(expr, a=-8, b=8, count=280):
     for k in range(count + 1):
         xx = a + (b-a)*k/count
         try:
+            if domain is not None and not contains(domain, s.Float(xx)):
+                pts.append(None)
+                continue
             yy = float(fun(xx))
             if math.isfinite(yy) and abs(yy) < 1000:
                 pts.append([round(xx, 5), round(yy, 6)])
@@ -182,25 +221,273 @@ def solve_algebra(data, action):
                           step('Contrôle par différence', rf'{L(s.simplify(f-out))}=0')], [L(out)])
 
 
+def real_domain(expr):
+    """Retain restrictions in the entered tree, including cancelled factors.
+
+    None means that the domain could not be established. It must never be
+    silently replaced with R. sign occurs in derivatives of absolute values;
+    its quotient form describes the intervals where that formula is smooth.
+    """
+    expr = expr.replace(s.sign, lambda arg: arg / s.Abs(arg))
+    if not expr.free_symbols:
+        return s.S.Reals if expr.is_real is True and expr.is_finite is True else s.S.EmptySet
+    try:
+        if expr.has(s.Piecewise):
+            domains = []
+            for branch, region in s.piecewise_fold(expr).as_expr_set_pairs(domain=s.S.Reals):
+                branch_domain = real_domain(branch)
+                if branch_domain is None:
+                    return None
+                domains.append(region.intersect(branch_domain))
+            return s.Union(*domains)
+        domains = [continuous_domain(expr, x, s.S.Reals)]
+        for node in s.preorder_traversal(expr):
+            restricted_power = (node.is_Pow and
+                                (node.exp.is_negative or
+                                 (node.exp.is_Rational and node.exp.q % 2 == 0)))
+            if restricted_power or node.func in (s.log, s.tan, s.asin, s.acos):
+                domains.append(continuous_domain(node, x, s.S.Reals))
+        return s.Intersection(*domains)
+    except (ValueError, NotImplementedError, TypeError):
+        return None
+
+
+def contains(domain, point):
+    return domain is not None and domain.contains(point) is s.S.true
+
+
+def readable_derivative(expr):
+    """Prefer a single factored fraction without unsafe radical identities."""
+    for sign in expr.atoms(s.sign):
+        arg = sign.args[0]
+        if arg.is_real is True:
+            expr = expr.subs(arg * sign, s.Abs(arg))
+    simplified = s.simplify(expr)
+    candidates = [expr, simplified, s.factor(s.together(simplified))]
+    if not expr.has(s.Piecewise):
+        candidates = [item for item in candidates if not item.has(s.Piecewise)]
+    return min(candidates, key=lambda item: len(L(item)) + 2 * s.count_ops(item))
+
+
+def derivative_name(order):
+    return r'f\prime' if order == 1 else rf'f^{{({order})}}'
+
+
+def derivative_latex(expr, domain=None):
+    if domain is not None and expr.has(s.sign, s.Piecewise):
+        try:
+            pieces = s.piecewise_fold(expr.rewrite(s.Piecewise))
+            pairs = pieces.as_expr_set_pairs(domain=domain)
+            return r'\begin{cases}' + r'\\'.join(
+                L(value) + r'&x\in ' + L(region) for value, region in pairs
+                if region is not s.S.EmptySet) + r'\end{cases}'
+        except (ValueError, NotImplementedError, AttributeError):
+            pass
+    return L(expr)
+
+
+def differentiate_function(f, original, order=1):
+    domain = real_domain(original)
+    if domain is not None and domain.interior is s.S.EmptySet:
+        raise ValueError('La fonction n’est définie sur aucun intervalle réel ouvert permettant une dérivation usuelle.')
+    derivatives = []
+    previous, previous_domain, point_values = f, domain, {}
+    previous_complete = domain is not None
+    h = s.Symbol('h', real=True)
+    for k in range(1, order + 1):
+        # Differentiate sign on its open branches, not as a distribution.
+        differentiand = previous.replace(s.sign, lambda arg: s.sign(arg).rewrite(s.Piecewise))
+        raw = s.diff(differentiand, x)
+        if raw.has(s.Derivative, s.DiracDelta):
+            raise ValueError('La dérivation de cette fonction discontinue n’est pas prise en charge.')
+        d = readable_derivative(raw)
+        expression_domain = real_domain(d)
+        regular = (previous_domain.interior.intersect(expression_domain)
+                   if previous_domain is not None and expression_domain is not None else None)
+        established, exceptions = regular, {}
+        complete = previous_complete and regular is not None
+        if regular is not None:
+            missing = previous_domain.interior - regular
+            # A formula may have a removable singularity. Check the actual
+            # difference quotient before deciding whether a derivative exists.
+            if isinstance(missing, s.FiniteSet) and len(missing) <= 6:
+                for a in missing:
+                    value = point_values.get(a, previous.subs(x, a))
+                    quotient = (previous.subs(x, a + h) - value) / h
+                    try:
+                        left = s.limit(quotient, h, 0, dir='-')
+                        right = s.limit(quotient, h, 0, dir='+')
+                        if (left.is_real is True and left.is_finite is True and
+                                s.simplify(left - right) == 0):
+                            exceptions[a] = s.simplify(left)
+                        elif not (left.is_finite is False or right.is_finite is False or
+                                  s.simplify(left - right).is_zero is False):
+                            complete = False
+                    except (ValueError, NotImplementedError, TypeError):
+                        complete = False
+                established = regular.union(s.FiniteSet(*exceptions))
+            elif missing is not s.S.EmptySet:
+                complete = False
+        derivatives.append({'order': k, 'expression': d, 'formula_domain': regular,
+                            'domain': established, 'complete': complete,
+                            'point_values': exceptions})
+        previous, previous_domain, point_values = d, established, exceptions
+        previous_complete = complete
+    return domain, derivatives
+
+
+def differentiation_steps(f, original):
+    steps = []
+    # Use the entered tree to preserve sqrt() in quotients and products.
+    radicals = sorted({node for node in s.preorder_traversal(original)
+                       if node.is_Pow and node.exp == s.S.Half and node.base.has(x)},
+                      key=lambda item: (s.count_ops(item), s.default_sort_key(item)))
+    for index, radical in enumerate(radicals[:4], 1):
+        inside = radical.base
+        du = readable_derivative(s.diff(inside, x))
+        name = f'u_{{{index}}}'
+        steps.append(step('Dérivée de la fonction sous la racine',
+                          rf'{name}(x)={L(inside)},\quad {name}\prime(x)={L(du)}'))
+        steps.append(step('Règle de la racine composée',
+                          r'\left(\sqrt{' + name + r'}\right)\prime=\frac{' + name + r'\prime}{2\sqrt{' + name + r'}}',
+                          'On dérive aussi l’expression sous la racine. Cette formule s’applique lorsque le radicand est strictement positif.'))
+    numerator, denominator = f.as_numer_denom()
+    if denominator.has(x):
+        steps.append(step('Règle du quotient',
+                          r'\left(\frac{u}{v}\right)\prime=\frac{u\prime v-u v\prime}{v^2}'))
+        steps.append(step('Dérivées du numérateur et du dénominateur',
+                          r'\begin{aligned}' + rf'u&={L(numerator)},&u\prime&={L(readable_derivative(s.diff(numerator, x)))}\\'
+                          + rf'v&={L(denominator)},&v\prime&={L(readable_derivative(s.diff(denominator, x)))}'
+                          + r'\end{aligned}'))
+    elif f.is_Mul:
+        factors = [part for part in f.args if part.has(x)]
+        if len(factors) >= 2:
+            steps.append(step('Règle du produit', r'(uv)\prime=u\prime v+uv\prime'))
+    if original.has(s.Abs):
+        steps.append(step('Valeur absolue et points particuliers',
+                          r'\sqrt{x^2}=|x|',
+                          'Une racine d’un carré donne une valeur absolue. Les points où l’expression s’annule doivent être examinés avant d’y calculer une tangente.'))
+    return steps
+
+
+def numerical_derivative_check(f, derivative, domain):
+    """Independent local check, never a proof of the symbolic identity."""
+    if domain is None:
+        return {'status': 'inconclusive', 'samples': []}
+    candidates = [s.Integer(v) for v in (-3, -1, 0, 1, 3)]
+    parts = domain.args if isinstance(domain, s.Union) else [domain]
+    for part in parts:
+        if not isinstance(part, s.Interval):
+            continue
+        a, b = part.start, part.end
+        if a is -s.oo and b is s.oo:
+            continue
+        if a is -s.oo:
+            candidates.insert(0, b - 1)
+        elif b is s.oo:
+            candidates.insert(0, a + 1)
+        else:
+            candidates.insert(0, (a + b) / 2)
+    samples = []
+    h = s.Rational(1, 10**6)
+    for a in dict.fromkeys(candidates):
+        if len(samples) >= 4:
+            break
+        if not contains(domain, a) or s.Interval(a - h, a + h).is_subset(domain) is not True:
+            continue
+        try:
+            expected = s.N(derivative.subs(x, a), 50)
+            plus = s.N(f.subs(x, a + h), 50)
+            minus = s.N(f.subs(x, a - h), 50)
+            estimate = (plus - minus) / (2 * h)
+            if not all(value.is_real is True and value.is_finite is True
+                       for value in (expected, plus, minus, estimate)):
+                continue
+            error = float(abs(expected - estimate) / (1 + abs(expected)))
+            samples.append({'x': L(a), 'symbolic': str(s.N(expected, 10)),
+                            'finite_difference': str(s.N(estimate, 10)),
+                            'relative_error': error})
+        except (ArithmeticError, ValueError, TypeError):
+            continue
+    passed = bool(samples) and all(item['relative_error'] < 1e-7 for item in samples)
+    return {'status': 'passed' if passed else 'inconclusive', 'samples': samples}
+
+
 def solve_derivative(data):
     f = read_expr(data)
-    if f.free_symbols - {x}:
+    original = parse_math(data.get('expression', ''), evaluate=False)
+    if f.free_symbols - {x} or original.free_symbols - {x}:
         raise ValueError('Saisissez une fonction de x uniquement.')
-    d = s.simplify(s.diff(f, x))
-    steps = [step('Fonction initiale', rf'f(x)={L(f)}'),
-             step('Dérivation par rapport à x', rf'f\prime(x)={L(d)}')]
-    extra = data.get('point', '')
-    answers = [rf'f\prime(x)={L(d)}']
-    if str(extra).strip():
+    order = as_int(data.get('order', '1'), 'L’ordre de dérivation', 1, 5)
+    domain, derivatives = differentiate_function(f, original, order)
+    steps = [step('Fonction initiale', rf'f(x)={L(f)}')]
+    if domain is not None:
+        steps.append(step('Domaine de définition', rf'D_f={L(domain)}',
+                          'On conserve les valeurs pour lesquelles toutes les opérations de l’expression sont définies dans les réels.'))
+    else:
+        steps.append(step('Domaine de définition', r'\text{Domaine non déterminé}',
+                          'Le calcul n’a pas établi le domaine réel de cette fonction.'))
+    steps.extend(differentiation_steps(f, original))
+    answers = []
+    for item in derivatives:
+        name = derivative_name(item['order'])
+        formula = rf'{name}(x)={derivative_latex(item["expression"], item["formula_domain"])}'
+        steps.append(step(f'Dérivée d’ordre {item["order"]}', formula))
+        if item['formula_domain'] is not None and (item['formula_domain'] != item['domain'] or not item['complete']):
+            steps.append(step('Validité de la formule', rf'x\in {L(item["formula_domain"])}'))
+        if item['domain'] is not None:
+            label = 'Domaine de dérivabilité' if item['complete'] else 'Domaine de dérivation établi'
+            steps.append(step(label, rf'D_{{{name}}}={L(item["domain"])}',
+                              '' if item['complete'] else 'D’autres points peuvent nécessiter une étude séparée.'))
+        for a, value in item['point_values'].items():
+            special = rf'{name}({L(a)})={L(value)}'
+            steps.append(step('Dérivée au point particulier', special,
+                              'Valeur obtenue par la limite du taux d’accroissement.'))
+            answers.append(special)
+        answers.append(formula)
+    final = derivatives[-1]
+    if final['formula_domain'] is not None:
+        answers.append(rf'x\in {L(final["formula_domain"])}')
+    check_source = f if order == 1 else derivatives[-2]['expression']
+    verification = numerical_derivative_check(check_source, final['expression'], final['formula_domain'])
+    if verification['status'] == 'passed':
+        sample = verification['samples'][0]
+        steps.append(step('Contrôle numérique indépendant',
+                          rf'{derivative_name(order)}\left({sample["x"]}\right)\simeq {sample["symbolic"]}',
+                          f'Concordance avec le taux d’accroissement en {len(verification["samples"])} points du domaine. Ce contrôle local ne constitue pas une démonstration.'))
+    else:
+        steps.append(step('Contrôle numérique', r'\text{Contrôle non concluant}',
+                          'Le résultat reste symbolique ; aucun contrôle numérique concluant n’est annoncé.'))
+    extra = str(data.get('point', '')).strip()
+    if extra:
         a = as_number(extra, 'Le point x₀')
-        va, slope = s.simplify(f.subs(x, a)), s.simplify(d.subs(x, a))
-        if not (va.is_finite and slope.is_finite):
-            raise ValueError('La fonction ou sa dérivée n’est pas définie au point donné.')
-        tangent = s.expand(slope*(x-a)+va)
-        steps.extend([step('Valeur et pente au point', rf'f({L(a)})={L(va)},\quad f\prime({L(a)})={L(slope)}'),
-                      step('Équation de la tangente', rf'y=f\prime({L(a)})(x-{L(a)})+f({L(a)})={L(tangent)}')])
+        first = derivatives[0]
+        if domain is None or first['domain'] is None:
+            raise ValueError('Le domaine réel n’a pas pu être établi pour vérifier la tangente à ce point.')
+        if not contains(domain, a):
+            raise ValueError('Le point demandé n’appartient pas au domaine réel de la fonction.')
+        if not contains(first['domain'], a):
+            if not first['complete']:
+                raise ValueError('La dérivabilité au point demandé n’a pas été établie ; aucune tangente n’est calculée.')
+            raise ValueError('La fonction n’est pas dérivable au point demandé dans un voisinage réel ouvert : aucune tangente de pente finie n’est calculée.')
+        va = s.simplify(f.subs(x, a))
+        slope = first['point_values'].get(a, s.simplify(first['expression'].subs(x, a)))
+        if not (va.is_real is True and slope.is_real is True and va.is_finite is True and slope.is_finite is True):
+            raise ValueError('La valeur de la fonction et la pente doivent être réelles et finies.')
+        tangent = s.expand(slope * (x - a) + va)
+        steps.extend([step('Valeur au point', rf'f({L(a)})={L(va)}'),
+                      step('Pente de la tangente', rf'f\prime({L(a)})={L(slope)}'),
+                      step('Équation de la tangente', rf'y={L(tangent)}')])
         answers.append(rf'y={L(tangent)}')
-    return result('Dérivée et tangente', steps, answers, plot=series_plot(f))
+    serialized = [{'order': item['order'], 'expression': str(item['expression']),
+                   'latex': derivative_latex(item['expression'], item['formula_domain']),
+                   'formula_domain': str(item['formula_domain']),
+                   'domain': str(item['domain']), 'domain_complete': item['complete']}
+                  for item in derivatives]
+    return result('Dérivées et tangente', steps, answers,
+                  description='Calcul exact, règles de dérivation et contrôle numérique local.',
+                  plot=series_plot(f, domain=domain), derivatives=serialized,
+                  verification=verification, domain=str(domain))
 
 
 def solve_integral(data):
@@ -259,25 +546,30 @@ def solve_limit(data):
 
 def solve_function(data):
     f = read_expr(data)
-    if f.free_symbols - {x}:
+    original = parse_math(data.get('expression', ''), evaluate=False)
+    if f.free_symbols - {x} or original.free_symbols - {x}:
         raise ValueError('L’étude nécessite une fonction de x.')
+    domain, derivatives = differentiate_function(f, original)
+    item = derivatives[0]
+    d = item['expression']
+    derivative_domain = item['domain']
+    if domain is None or derivative_domain is None:
+        raise ValueError('Le domaine réel n’a pas pu être établi pour une étude de fonction fiable.')
     try:
-        domain = continuous_domain(f, x, s.S.Reals)
-    except (ValueError, NotImplementedError):
-        domain = s.S.Reals
-    d = s.factor(s.diff(f,x))
-    try:
-        critical = s.solveset(d, x, domain=domain)
+        critical = s.solveset(d, x, domain=derivative_domain)
+        critical = critical.union(s.FiniteSet(*(a for a, value in item['point_values'].items() if value == 0)))
     except Exception:
-        critical = s.ConditionSet(x,s.Eq(d,0),domain)
+        critical = s.ConditionSet(x,s.Eq(d,0),derivative_domain)
     try:
-        growing = s.solve_univariate_inequality(s.Gt(d,0), x, relational=False).intersect(domain)
-        falling = s.solve_univariate_inequality(s.Lt(d,0), x, relational=False).intersect(domain)
+        sign_expression = d.replace(s.sign, lambda arg: arg / s.Abs(arg))
+        growing = s.solve_univariate_inequality(s.Gt(sign_expression,0), x, relational=False).intersect(derivative_domain)
+        falling = s.solve_univariate_inequality(s.Lt(sign_expression,0), x, relational=False).intersect(derivative_domain)
     except (ValueError, NotImplementedError, TypeError):
         growing = falling = None
     steps = [step('Fonction',rf'f(x)={L(f)}'),
              step('Domaine de définition',rf'D_f={L(domain)}'),
-             step('Dérivée factorisée',rf'f\prime(x)={L(d)}'),
+             step('Dérivée factorisée',rf'f\prime(x)={derivative_latex(d, derivative_domain)}'),
+             step('Domaine de dérivation établi',rf'D_{{f\prime}}={L(derivative_domain)}'),
              step('Points critiques',rf'f\prime(x)=0\;\Rightarrow\;x\in {L(critical)}')]
     if growing is not None:
         steps.append(step('Intervalles de croissance',rf'f\prime(x)>0\;\text{{sur}}\;{L(growing)}'))
@@ -287,10 +579,10 @@ def solve_function(data):
             fc=s.simplify(f.subs(x,c))
             if fc.is_finite:
                 steps.append(step('Valeur au point critique',rf'f({L(c)})={L(fc)}'))
-    answers = [rf'D_f={L(domain)}',rf'f\prime(x)={L(d)}']
+    answers = [rf'D_f={L(domain)}',rf'f\prime(x)={derivative_latex(d, derivative_domain)}']
     if growing is not None:
         answers += [rf'\nearrow:\;{L(growing)}', rf'\searrow:\;{L(falling)}']
-    return result('Étude de fonction', steps,answers,plot=series_plot(f))
+    return result('Étude de fonction', steps,answers,plot=series_plot(f, domain=domain))
 
 
 def solve_system(data):

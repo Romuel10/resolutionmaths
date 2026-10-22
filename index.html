@@ -24,7 +24,7 @@
       </nav>
       <div class="sidebar-heading categories-title">DOMAINES MATHÉMATIQUES</div>
       <div class="mode-list" id="modeList" role="group" aria-label="Choix du type de problème"></div>
-      <div class="sidebar-footer"><span class="status-dot" id="engineDot"></span><span id="engineStatus">Moteur non chargé</span><small>Version 1.0.0</small></div>
+      <div class="sidebar-footer"><span class="status-dot" id="engineDot"></span><span id="engineStatus">Moteur non chargé</span><small>Version 1.1.0</small></div>
     </aside>
 
     <div class="main-area">
@@ -50,7 +50,7 @@
                 <label class="field-label" for="expression">Expression ou données mathématiques</label>
                 <textarea id="expression" spellcheck="false" rows="4" placeholder="Exemple : 2x^2 - 5x + 2 = 0" aria-describedby="entryHelp" maxlength="350"></textarea>
                 <div class="field-help" id="entryHelp">Utilisez ^ pour les puissances, * pour multiplier et ; pour séparer plusieurs équations.</div>
-                <div class="math-keyboard" role="group" aria-label="Clavier mathématique"><button type="button" data-insert="x^2">x²</button><button type="button" data-insert="sqrt()">√</button><button type="button" data-insert="pi">π</button><button type="button" data-insert="/">a/b</button><button type="button" data-insert="^">xⁿ</button><button type="button" data-insert="<=">≤</button><button type="button" data-insert=">=">≥</button><button type="button" data-insert="sin()">sin</button><button type="button" data-insert="log()">ln</button><button type="button" data-insert="()">( )</button></div>
+                <div class="math-keyboard" role="group" aria-label="Clavier mathématique"><button type="button" data-insert="x^2">x²</button><button type="button" data-insert="sqrt()" aria-label="Insérer une racine carrée">√</button><button type="button" data-insert="pi">π</button><button type="button" data-insert="/">a/b</button><button type="button" data-insert="^">xⁿ</button><button type="button" data-insert="<=">≤</button><button type="button" data-insert=">=">≥</button><button type="button" data-insert="sin()">sin</button><button type="button" data-insert="ln()">ln</button><button type="button" data-insert="exp()">eˣ</button><button type="button" data-insert="()">( )</button></div>
                 <div id="extraFields" class="extra-fields"></div>
                 <div class="editor-bottom"><span class="privacy-line"><span class="lock-icon">◇</span> Calcul effectué sur votre appareil</span><button class="primary-btn" id="solveBtn" type="submit">Résoudre <span>→</span></button></div>
               </form>
