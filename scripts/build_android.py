@@ -44,7 +44,8 @@ def main():
         text = manifest.read_text().replace('package="mg.resolutionmaths.app"', 'package="mg.resolutionmaths.preview"')
         text = text.replace('android:label="Résolution Maths"', 'android:label="Résolution Maths Test"')
         text = text.replace('android:versionName="1.1.0"', 'android:versionName="1.1.0-test"')
-        manifest = build / "preview-AndroidManifest.xml"
+        manifest = build / "preview/AndroidManifest.xml"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
         manifest.write_text(text)
     run(tools / "aapt", "package", "-f", "-M", manifest, "-S", src / "res",
         "-A", build / "assets", "-I", args.platform, "-J", build / "gen", "-F", build / "resources.apk")
