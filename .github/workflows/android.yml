@@ -1,0 +1,43 @@
+name: APK Android de test
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Installer le SDK Android
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Créer une clé temporaire pour l’application de test
+        run: >-
+          keytool -genkeypair -keystore "$RUNNER_TEMP/test.p12" -storetype PKCS12
+          -alias resolutionmaths -keyalg RSA -keysize 2048 -validity 365
+          -storepass android -keypass android -dname 'CN=Resolution Maths Test'
+      - name: Compiler l’APK de test
+        env:
+          ANDROID_KEYSTORE_PASSWORD: android
+          ANDROID_KEY_PASSWORD: android
+        run: >-
+          python scripts/build_android.py --preview --keystore "$RUNNER_TEMP/test.p12"
+          --output dist/Resolution-Maths-1.1.0-test.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Resolution-Maths-1.1.0-test
+          path: dist/Resolution-Maths-1.1.0-test.apk
+          if-no-files-found: error
+          retention-days: 30

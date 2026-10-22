@@ -52,6 +52,38 @@ node --check app.js
 3. Déployer et tester la première résolution avec une connexion Internet.
 4. Pour une installation sur Android, ouvrir le site dans Chrome puis utiliser « Installer l'application » selon les options du navigateur.
 
+## Application Android (APK)
+
+Une application Android native est disponible dans `android/` : elle embarque l’interface,
+Pyodide, SymPy et KaTeX. Les calculs et les formules sont utilisables **hors connexion,
+dès le premier démarrage**. Android 8.0 ou plus récent est requis, avec un Android System
+WebView à jour. Le nom dans le téléphone est **Résolution Maths** et l’icône reprend le
+symbole ∑ du site. L’historique reste uniquement sur l’appareil.
+
+Le contenu local utilise une origine HTTPS interceptée dans la WebView, pour permettre
+les workers et WebAssembly sans autoriser les URL `file://` ni exposer de pont JavaScript
+vers Android. Toutes les dépendances sont incluses dans le fichier APK. Les requêtes
+externes de la WebView sont bloquées. Les barres système, les encoches et le clavier sont
+pris en compte par la fenêtre Android.
+
+La compilation nécessite Java 17, Python 3, le SDK `platforms;android-35` et
+`build-tools;35.0.0`. Seule la compilation télécharge les dépendances. La clé de signature
+est privée : elle doit être conservée avec son mot de passe pour les futures mises à jour.
+
+```bash
+export ANDROID_SDK_ROOT=/chemin/vers/android-sdk
+export ANDROID_KEYSTORE_PASSWORD='mot-de-passe-de-la-cle'
+export ANDROID_KEY_PASSWORD="$ANDROID_KEYSTORE_PASSWORD"
+python scripts/build_android.py --keystore /chemin/prive/resolutionmaths.p12
+```
+
+Le fichier généré est `dist/Resolution-Maths-1.1.0.apk`. Ne jamais publier la clé privée
+dans le dépôt. Le workflow **APK Android de test** fournit aussi un APK de test dans les
+artifacts GitHub Actions. Celui-ci s’installe comme une application séparée nommée
+**Résolution Maths Test** : sa clé temporaire ne sert pas à signer les mises à jour de
+l’application distribuée. Une nouvelle compilation de test peut nécessiter de désinstaller
+la précédente application de test ; la version distribuée et son historique restent séparés.
+
 ## Notation
 
 | Opération | Saisie |
